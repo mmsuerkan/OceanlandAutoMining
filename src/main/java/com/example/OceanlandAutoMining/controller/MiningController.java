@@ -1,34 +1,39 @@
 package com.example.OceanlandAutoMining.controller;
 
+import com.example.OceanlandAutoMining.entity.User;
+import com.example.OceanlandAutoMining.error.CustomResponseErrorHandler;
+import com.example.OceanlandAutoMining.entity.Equipment;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @RestController
 @RequiredArgsConstructor
 public class MiningController {
     private final RestTemplate restTemplate;
+    private List<User> users = Arrays.asList(
+            new User("msuerkan301@gmail.com", "Mu102019*"),
+            new User("msuerkan302@gmail.com", "Mu102019*")
+    );
 
-    @GetMapping("/fetch-token")
-    public String fetchToken() {
+    public MiningController() {
+        this.restTemplate = new RestTemplate();
+        this.restTemplate.setErrorHandler(new CustomResponseErrorHandler());
+    }
 
-
+    public String fetchToken(User user) {
         String apiUrl = "https://api.oceanland.io/api/auth/signin/email";
-        String requestBody = "{ \"chainid\": \"" + "0x38" + "\", \"email\": \"" + "msuerkan301@gmail.com" + "\", \"password\": \"" + "Mu102019*" + "\" }";
+        String requestBody = "{ \"chainid\": \"" + "0x38" + "\", \"email\": \"" + user.getEmail() + "\", \"password\": \"" + user.getPassword() + "\" }";
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -48,9 +53,8 @@ public class MiningController {
         return accessToken;
     }
 
-    @GetMapping("/fetch-equipped-nfts")
-    public List<Equipment> fetchEquipment() {
-        String accessToken = fetchToken();
+    public List<Equipment> fetchEquipment(User user) {
+        String accessToken = fetchToken(user);
         String apiUrl = "https://api.oceanland.io/api/equip";
 
         HttpHeaders headers = new HttpHeaders();
@@ -63,33 +67,29 @@ public class MiningController {
         Equipment[] equipmentArray = response.getBody();
         return Arrays.asList(equipmentArray);
     }
-    @Scheduled(fixedRate = 1800000)
+
+    @Scheduled(fixedRate = 1000 * 60)
     public void startAllEquippedNFTs() {
-        // Fetch equipped NFTs
-        List<Equipment> equippedNFTs = fetchEquipment();
+        for (User user : users) {
+            List<Equipment> equippedNFTs = fetchEquipment(user);
 
-        // Filter NFTs with type TOOL
-        List<Equipment> tools = equippedNFTs.stream()
-                .filter(nft -> "TOOL".equals(nft.getNftType()))
-                .collect(Collectors.toList());
+            List<Equipment> tools = equippedNFTs.stream()
+                    .filter(nft -> "TOOL".equals(nft.getNftType()))
+                    .filter(nft -> nft.getNextAvailableTime() < System.currentTimeMillis())
+                    .collect(Collectors.toList());
 
-        // Get the current server time
-        long serverTime = System.currentTimeMillis(); // Assume server time is same as system time
+            List<Equipment> startableTools = tools.stream()
+                    .collect(Collectors.toList());
 
-        // Filter tools that can be started now
-        List<Equipment> startableTools = tools.stream()
-                .filter(tool -> tool.getNextAvailableTime() <= serverTime && tool.getRemainingSeconds() == 0)
-                .collect(Collectors.toList());
-
-        // Start all startable TOOL NFTs
-        for (Equipment tool : startableTools) {
-            startNFT(tool.getId());
+            for (Equipment tool : startableTools) {
+                startNFT(tool.getId(), user);
+            }
         }
     }
 
-    public void startNFT(long id) {
+    public void startNFT(long id, User user) {
         try {
-            String accessToken = fetchToken();
+            String accessToken = fetchToken(user);
             String apiUrl = "https://api.oceanland.io/api/mine/" + id;
 
             HttpHeaders headers = new HttpHeaders();
@@ -100,7 +100,6 @@ public class MiningController {
 
             ResponseEntity<String> response = restTemplate.exchange(apiUrl, HttpMethod.POST, request, String.class);
 
-            // Optional: check the response
             if (response.getStatusCode() == HttpStatus.OK) {
                 System.out.println("Successfully started NFT with id: " + id);
             } else {
@@ -108,7 +107,6 @@ public class MiningController {
             }
         } catch (HttpClientErrorException e) {
             if (e.getStatusCode() == HttpStatus.INTERNAL_SERVER_ERROR) {
-                // Handle 500 error
                 System.out.println("Received 500 error for NFT with id: " + id + ". Skipping this NFT.");
             }
         }

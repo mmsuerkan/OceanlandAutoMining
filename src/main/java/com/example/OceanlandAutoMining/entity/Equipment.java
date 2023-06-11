@@ -1,4 +1,4 @@
-package com.example.OceanlandAutoMining.controller;
+package com.example.OceanlandAutoMining.entity;
 
 import lombok.Getter;
 import lombok.Setter;
