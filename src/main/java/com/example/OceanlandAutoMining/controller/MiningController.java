@@ -23,7 +23,8 @@ public class MiningController {
     private final RestTemplate restTemplate;
     private List<User> users = Arrays.asList(
             new User("msuerkan301@gmail.com", "Mu102019*"),
-            new User("msuerkan302@gmail.com", "Mu102019*")
+            new User("msuerkan302@gmail.com", "Mu102019*"),
+            new User("msuerkan303@gmail.com", "Mu102019*")
     );
 
     public MiningController() {

@@ -13,12 +13,16 @@ public class CustomResponseErrorHandler implements ResponseErrorHandler {
     public boolean hasError(ClientHttpResponse response) throws IOException {
         return response.getStatusCode().is5xxServerError();
     }
-
+    //500 Internal Server Error: "{"timestamp":1686939715470,"status":500,"error":"Internal Server Error","message":"You cannot mine with free NFT on multiple accounts!","path":"/api/mine/101621"}"
+    //hatadaki mesajı ve pathi almak için
     @Override
     public void handleError(ClientHttpResponse response) throws IOException {
         if (response.getStatusCode() == HttpStatus.INTERNAL_SERVER_ERROR) {
             // You can do logging here
-            System.out.println("Received 500 error. Skipping this NFT.");
+
+
+
+
         } else {
             throw new HttpClientErrorException(response.getStatusCode(), response.getStatusText());
         }
