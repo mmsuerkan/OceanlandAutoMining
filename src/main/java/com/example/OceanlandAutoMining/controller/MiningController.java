@@ -1,11 +1,14 @@
 package com.example.OceanlandAutoMining.controller;
 
 import com.example.OceanlandAutoMining.entity.User;
-import com.example.OceanlandAutoMining.error.CustomResponseErrorHandler;
 import com.example.OceanlandAutoMining.entity.Equipment;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.RestController;
@@ -15,12 +18,16 @@ import org.springframework.web.client.RestTemplate;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @RestController
 @RequiredArgsConstructor
 public class MiningController {
+    private final Logger logger = LoggerFactory.getLogger(MiningController.class);
+
     private final RestTemplate restTemplate;
+    private final Cache<String, List<Equipment>> equipmentCache;
     private List<User> users = Arrays.asList(
             new User("msuerkan301@gmail.com", "Mu102019*"),
             new User("msuerkan302@gmail.com", "Mu102019*"),
@@ -29,7 +36,9 @@ public class MiningController {
 
     public MiningController() {
         this.restTemplate = new RestTemplate();
-        this.restTemplate.setErrorHandler(new CustomResponseErrorHandler());
+        this.equipmentCache = Caffeine.newBuilder()
+                .expireAfterWrite(24, TimeUnit.HOURS)
+                .build();
     }
 
     public String fetchToken(User user) {
@@ -48,29 +57,14 @@ public class MiningController {
             JsonNode jsonNode = mapper.readTree(response.getBody());
             accessToken = jsonNode.get("accessToken").asText();
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("Error while parsing token response for user: {}", user.getEmail(), e);
         }
 
         return accessToken;
     }
 
-    public List<Equipment> fetchEquipment(User user) {
-        String accessToken = fetchToken(user);
-        String apiUrl = "https://api.oceanland.io/api/equip";
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("Authorization", "Bearer " + accessToken);
-
-        HttpEntity<String> request = new HttpEntity<>(headers);
-
-        ResponseEntity<Equipment[]> response = restTemplate.exchange(apiUrl, HttpMethod.GET, request, Equipment[].class);
-        Equipment[] equipmentArray = response.getBody();
-        return Arrays.asList(equipmentArray);
-    }
-
-    @Scheduled(fixedRate = 1000 * 60)
-    public void startAllEquippedNFTs() {
+    @Scheduled(fixedRate = 1000 * 60 * 30)
+    public void startAllEquippedNFTs() throws InterruptedException {
         for (User user : users) {
             List<Equipment> equippedNFTs = fetchEquipment(user);
 
@@ -84,8 +78,38 @@ public class MiningController {
 
             for (Equipment tool : startableTools) {
                 startNFT(tool.getId(), user);
+                Thread.sleep(2000);
             }
         }
+    }
+
+    public List<Equipment> fetchEquipment(User user) {
+        if (equipmentCache.asMap().containsKey(user.getEmail())) {
+            logger.info("Fetching equipment data from cache for user: {}", user.getEmail());
+            return equipmentCache.get(user.getEmail(), key -> fetchEquipmentFromAPI(user));
+        }
+
+        return fetchEquipmentFromAPI(user);
+    }
+
+    private List<Equipment> fetchEquipmentFromAPI(User user) {
+        String accessToken = fetchToken(user);
+        String apiUrl = "https://api.oceanland.io/api/equip";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Authorization", "Bearer " + accessToken);
+
+        HttpEntity<String> request = new HttpEntity<>(headers);
+
+        ResponseEntity<Equipment[]> response = restTemplate.exchange(apiUrl, HttpMethod.GET, request, Equipment[].class);
+        Equipment[] equipmentArray = response.getBody();
+        List<Equipment> equipmentList = Arrays.asList(equipmentArray);
+
+        equipmentCache.put(user.getEmail(), equipmentList);
+        logger.info("Fetched equipment data from API for user: {}", user.getEmail());
+
+        return equipmentList;
     }
 
     public void startNFT(long id, User user) {
@@ -102,13 +126,13 @@ public class MiningController {
             ResponseEntity<String> response = restTemplate.exchange(apiUrl, HttpMethod.POST, request, String.class);
 
             if (response.getStatusCode() == HttpStatus.OK) {
-                System.out.println("Successfully started NFT with id: " + id);
+                logger.info("Successfully started NFT with id: {} for user: {}", id, user.getEmail());
             } else {
-                System.out.println("Failed to start NFT with id: " + id);
+                logger.error("Failed to start NFT with id: {} for user: {}", id, user.getEmail());
             }
         } catch (HttpClientErrorException e) {
             if (e.getStatusCode() == HttpStatus.INTERNAL_SERVER_ERROR) {
-                System.out.println("Received 500 error for NFT with id: " + id + ". Skipping this NFT.");
+                logger.error("Received 500 error for NFT with id: {} for user: {}. Skipping this NFT.", id, user.getEmail());
             }
         }
     }
