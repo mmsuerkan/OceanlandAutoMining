@@ -1,5 +1,8 @@
 package com.example.OceanlandAutoMining.error;
 
+import com.example.OceanlandAutoMining.controller.MiningController;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.web.client.HttpClientErrorException;
@@ -8,6 +11,8 @@ import org.springframework.web.client.ResponseErrorHandler;
 import java.io.IOException;
 
 public class CustomResponseErrorHandler implements ResponseErrorHandler {
+
+    private final Logger logger = LoggerFactory.getLogger(MiningController.class);
 
     @Override
     public boolean hasError(ClientHttpResponse response) throws IOException {
@@ -20,7 +25,7 @@ public class CustomResponseErrorHandler implements ResponseErrorHandler {
         if (response.getStatusCode() == HttpStatus.INTERNAL_SERVER_ERROR) {
             // You can do logging here
 
-
+        logger.error("Error occured while calling remote service, status code: {}, status text: {}", response.getStatusCode(), response.getBody());
 
 
         } else {

@@ -2,6 +2,7 @@ package com.example.OceanlandAutoMining.controller;
 
 import com.example.OceanlandAutoMining.entity.User;
 import com.example.OceanlandAutoMining.entity.Equipment;
+import com.example.OceanlandAutoMining.error.CustomResponseErrorHandler;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Cache;
@@ -36,6 +37,7 @@ public class MiningController {
 
     public MiningController() {
         this.restTemplate = new RestTemplate();
+        this.restTemplate.setErrorHandler(new CustomResponseErrorHandler());
         this.equipmentCache = Caffeine.newBuilder()
                 .expireAfterWrite(24, TimeUnit.HOURS)
                 .build();
@@ -70,9 +72,7 @@ public class MiningController {
 
             List<Equipment> tools = equippedNFTs.stream()
                     .filter(nft -> "TOOL".equals(nft.getNftType()))
-                    .filter(nft -> nft.getNextAvailableTime() < System.currentTimeMillis())
                     .toList();
-
 
             for (Equipment tool : tools) {
                 startNFT(tool.getId(), user);
