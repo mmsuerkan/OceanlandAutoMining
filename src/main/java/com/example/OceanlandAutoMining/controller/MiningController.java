@@ -71,14 +71,11 @@ public class MiningController {
             List<Equipment> tools = equippedNFTs.stream()
                     .filter(nft -> "TOOL".equals(nft.getNftType()))
                     .filter(nft -> nft.getNextAvailableTime() < System.currentTimeMillis())
-                    .collect(Collectors.toList());
+                    .toList();
 
-            List<Equipment> startableTools = tools.stream()
-                    .collect(Collectors.toList());
 
-            for (Equipment tool : startableTools) {
+            for (Equipment tool : tools) {
                 startNFT(tool.getId(), user);
-                Thread.sleep(2000);
             }
         }
     }
